@@ -52,7 +52,7 @@ process.on('uncaughtException', (err) => {
 
 const app = express();
 const server = http.createServer(app);
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Preset target traders available for 1-click copy trading & tracking
 const PRESET_TRADERS = [
@@ -498,8 +498,9 @@ function processBookUpdate(assetId: string, bids: any[], asks: any[], rawTs: any
   book.updatedAt = receiveTime;
   const lat = parseEventLatency(rawTs, receiveTime);
   if (lat > 0) book.latencyMs = lat;
-  const rawPrice = book.bestAsk > 0 ? book.bestAsk : (book.lastPrice > 0 ? book.lastPrice : book.bestBid);
+  const rawPrice = book.lastPrice > 0 ? book.lastPrice : (book.bestAsk > 0 ? book.bestAsk : book.bestBid);
   livePrices[assetId] = rawPrice;
+  evaluateMomentumStrategy('BTC');
 }
 
 function processPriceUpdate(assetId: string, price: any, bestBid: any, bestAsk: any, rawTs: any, receiveTime: number) {
@@ -534,8 +535,9 @@ function processPriceUpdate(assetId: string, price: any, bestBid: any, bestAsk: 
   book.updatedAt = receiveTime;
   const lat = parseEventLatency(rawTs, receiveTime);
   if (lat > 0) book.latencyMs = lat;
-  const updateRawPrice = book.bestBid > 0 ? book.bestBid : book.lastPrice;
+  const updateRawPrice = book.lastPrice > 0 ? book.lastPrice : (book.bestAsk > 0 ? book.bestAsk : (book.bestBid > 0 ? book.bestBid : 0));
   livePrices[assetId] = updateRawPrice;
+  evaluateMomentumStrategy('BTC');
 }
 
 function isValidClobTokenId(id: string): boolean {
@@ -695,7 +697,7 @@ function evaluatePositionRiskManagement() {
 setInterval(evaluatePositionRiskManagement, 100);
 setInterval(() => {
   evaluateMomentumStrategy('BTC');
-}, 50);
+}, 10);
 
 let btcSpotTicker = {
   price: 0,
@@ -1187,10 +1189,11 @@ async function pollActiveMomentumWindow(symbol: string): Promise<string[]> {
     if (currentData.outcomePrices && currentData.outcomePrices.length >= 2) {
       const [upP, downP] = currentData.outcomePrices;
       const now = Date.now();
-      if (!marketBooks[currentData.upTokenId] || marketBooks[currentData.upTokenId].lastPrice === 0) {
+      // Only seed baseline if book is uninitialized (0), OR if market has hit 99¢/100¢ target
+      if (!marketBooks[currentData.upTokenId] || marketBooks[currentData.upTokenId].lastPrice === 0 || upP >= 0.985) {
         processPriceUpdate(currentData.upTokenId, upP, upP, upP, now, now);
       }
-      if (!marketBooks[currentData.downTokenId] || marketBooks[currentData.downTokenId].lastPrice === 0) {
+      if (!marketBooks[currentData.downTokenId] || marketBooks[currentData.downTokenId].lastPrice === 0 || downP >= 0.985) {
         processPriceUpdate(currentData.downTokenId, downP, downP, downP, now, now);
       }
     }
@@ -2581,7 +2584,7 @@ async function startServer() {
     pollActiveMomentumWindow('BTC').catch(() => {});
     setInterval(() => {
       pollActiveMomentumWindow('BTC').catch(() => {});
-    }, 50);
+    }, 5000);
 
     // Run AI audit immediately on startup and every 60 minutes 24/7
     runAutomatedAiAudit().catch(() => {});
