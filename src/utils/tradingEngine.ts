@@ -977,7 +977,7 @@ export function executeInternalSell(
   updatedAccount.currentStakeSize = 10.0;
 
   const remainingShares = position.shares - sharesToSell;
-  if (remainingShares > 0.001) {
+  if (remainingShares > 0.001 && sellFraction < 0.999) {
     const remainingCostFraction = 1 - (sharesToSell / position.shares);
     updatedAccount.positions[positionKey] = {
       ...position,

@@ -1309,26 +1309,32 @@ function evaluateMomentumStrategy(symbol: string) {
     const maxLoss = config.stopLossDollars || 3.00;
 
     // A. TAKE-PROFIT: Exit strictly when price is >= 99¢ (0.99, 1.00, or configured TP)
-    if (currentPrice >= (tpPrice - 0.005) || maxMarketPrice >= (tpPrice - 0.005) || currentPrice >= 0.99 || maxMarketPrice >= 0.99) {
+    if (currentPrice >= (tpPrice - 0.005) || maxMarketPrice >= (tpPrice - 0.005) || currentPrice >= 0.985 || maxMarketPrice >= 0.985) {
       console.log(`🎯 [${symbol} 15m FORCE-CLOSE TP] ${pos.title} (${pos.outcome}) Price: ${currentPrice} (max: ${maxMarketPrice}). Exiting @ 99¢ strictly booked.`);
       const res = executeInternalSell(account, key, 1.0, 'TAKE_PROFIT_99¢_SPOT', 0.99, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m TP ERROR]`, res.error);
       else {
         momentumAccounts[symbol] = res.account;
+        delete momentumAccounts[symbol].positions[key];
+        delete account.positions[key];
         flushState();
         broadcastSSE({ type: 'momentum_account_update', symbol, account: momentumAccounts[symbol], metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) });
       }
       continue;
     }
 
-    // B. STOP-LOSS: Locked at exact $3.00 loss
-    if (unrealizedLoss >= maxLoss) {
-      const exitPrice = Math.max(0.01, Number(((pos.totalCost - maxLoss) / pos.shares).toFixed(4)));
-      console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: ${unrealizedLoss}. Exiting @ $${maxLoss.toFixed(2)} loss.`);
+    // B. STOP-LOSS: Instant guaranteed close at $3.00 loss (preserving remaining $7.00 capital)
+    const posLoss = Math.max(unrealizedLoss, pos.totalCost - (pos.shares * realPrice), -pos.unrealizedPnl);
+    const slThreshold = Math.min(maxLoss, 3.00);
+    if (posLoss >= (slThreshold - 0.05) || unrealizedLoss >= (slThreshold - 0.05)) {
+      const exitPrice = Math.max(0.01, Number(((pos.totalCost - slThreshold) / pos.shares).toFixed(4)));
+      console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: ${posLoss}. Exiting @ $${slThreshold.toFixed(2)} loss strictly booked.`);
       const res = executeInternalSell(account, key, 1.0, '15M_STOP_LOSS_$3.00', exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m SL ERROR]`, res.error);
       else {
         momentumAccounts[symbol] = res.account;
+        delete momentumAccounts[symbol].positions[key];
+        delete account.positions[key];
         flushState();
         broadcastSSE({ type: 'momentum_account_update', symbol, account: momentumAccounts[symbol], metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) });
       }
