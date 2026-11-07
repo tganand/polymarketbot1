@@ -9,6 +9,31 @@
     <meta property="og:description" content="Autonomous Polymarket trading bot executing $10 entries at 91¢ with strict 99¢ profit target and $3 stop-loss, live CLOB orderbook streaming, whale tracker, and 24/7 VPS daemon mode." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          var _origFetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : null;
+          var desc = {
+            get: function() {
+              return _origFetch;
+            },
+            set: function(val) {
+              _origFetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          };
+          try {
+            Object.defineProperty(window, 'fetch', desc);
+          } catch (e1) {}
+          if (typeof window !== 'undefined' && window.Window && window.Window.prototype) {
+            try {
+              Object.defineProperty(window.Window.prototype, 'fetch', desc);
+            } catch (e2) {}
+          }
+        } catch (err) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -2046,6 +2046,15 @@ setInterval(pollPolymarket, config.pollingIntervalSeconds * 1000);
 
 // --- API Endpoints ---
 
+app.get('/api/bot-bundle.tar.gz', (req, res) => {
+  const file = path.resolve(__dirname, 'public', 'bot-bundle.tar.gz');
+  if (fs.existsSync(file)) {
+    res.download(file, 'bot-bundle.tar.gz');
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
 app.get('/api/status', (req, res) => {
   const metrics = calculatePortfolioMetrics(paperAccount, livePrices);
   res.json({
