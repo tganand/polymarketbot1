@@ -13,6 +13,9 @@ import {
   Percent,
   Receipt,
   Sparkles,
+  Radio,
+  Activity,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   ActiveBtcWindow,
@@ -48,6 +51,7 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
 }) => {
   const [timeLeft, setTimeLeft] = useState<number>(activeWindow?.timeLeftSeconds || 0);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState<'closed' | 'all'>('closed');
 
   useEffect(() => {
     if (activeWindow?.timeLeftSeconds !== undefined) {
@@ -487,23 +491,100 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
         </div>
       </div>
 
+      {/* Active Positions & Live Radar Cockpit */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            Active Positions
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-              {openPositions.length}
+            Active Position Cockpit
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ${openPositions.length > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
+              {openPositions.length > 0 ? `${openPositions.length} IN POSITION` : '0 OPEN'}
             </span>
           </h3>
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+            <span className="text-emerald-400 font-semibold uppercase text-[11px]">24/7 Daemon Active</span>
+          </div>
         </div>
 
         {openPositions.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl">
-            <Target className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-slate-400">No active positions</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Monitoring live prices. When trigger met, automated trade will appear here.
-            </p>
+          <div className="p-6 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/60 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <Radio className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    Monitoring 15m Polymarket Window
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider font-mono">
+                      Armed & Ready
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    {activeWindow?.title || 'Bitcoin Up or Down - 15m Window'} · <span className="font-mono text-amber-400">{formatTime(timeLeft)} remaining</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right text-xs font-mono text-slate-400 bg-slate-900/80 px-3 py-2 rounded-lg border border-slate-800">
+                Rule: <span className="text-amber-400 font-bold">≥91¢</span> Single $10 · Exit: <span className="text-emerald-400 font-bold">99¢</span> TP · <span className="text-rose-400 font-bold">-$3</span> SL
+              </div>
+            </div>
+
+            {/* Live Breakout Distance Radar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" /> UP Contract
+                  </span>
+                  <span className="font-mono font-bold text-slate-200">
+                    {upCents !== null ? `${upCents}¢` : '--¢'} <span className="text-slate-500 font-normal">/ 91¢</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-400 transition-all duration-300"
+                    style={{ width: `${Math.min(100, ((upCents || 0) / 91) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-[11px] text-slate-400 flex justify-between">
+                  <span>Distance to trigger:</span>
+                  <span className="font-mono text-slate-300 font-bold">
+                    {upCents !== null ? `${Math.max(0, 91 - upCents)}¢ away` : 'Waiting for quote'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400" /> DOWN Contract
+                  </span>
+                  <span className="font-mono font-bold text-slate-200">
+                    {downCents !== null ? `${downCents}¢` : '--¢'} <span className="text-slate-500 font-normal">/ 91¢</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-cyan-400 transition-all duration-300"
+                    style={{ width: `${Math.min(100, ((downCents || 0) / 91) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-[11px] text-slate-400 flex justify-between">
+                  <span>Distance to trigger:</span>
+                  <span className="font-mono text-slate-300 font-bold">
+                    {downCents !== null ? `${Math.max(0, 91 - downCents)}¢ away` : 'Waiting for quote'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-400 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/60 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <b>Auto-Execution Armed:</b> The instant either contract holds ≥91¢ for 400ms, the bot automatically buys a single $10 position and streams its live floating PnL right here.
+              </span>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -519,45 +600,64 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
               return (
                 <div
                   key={pos.id}
-                  className="p-5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                  className="p-5 rounded-xl bg-slate-950 border-2 border-amber-500/40 shadow-2xl space-y-4 relative overflow-hidden"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${pos.outcome.toUpperCase() === 'UP' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                        {pos.outcome}
-                      </span>
-                      <span className="font-semibold text-slate-200 text-sm">{pos.title}</span>
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${pos.outcome.toUpperCase() === 'UP' ? 'bg-emerald-500 text-slate-950' : 'bg-cyan-400 text-slate-950'}`}>
+                          ⚡ LIVE TRADE: {pos.outcome}
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm">{pos.title}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 font-mono flex-wrap">
+                        <span>Invested: <b className="text-slate-200">${((val) => (val !== undefined ? val.toFixed(2) : '0.00'))(pos.totalCost)}</b></span>
+                        <span>·</span>
+                        <span>Entry: <b className="text-slate-200">{(((pos.entryPrice || 0) * 100).toFixed(1))}¢</b></span>
+                        <span>·</span>
+                        <span>Live Mark: <b className={`text-base ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>{((livePrice * 100).toFixed(1))}¢</b></span>
+                        <span>·</span>
+                        <span>Shares: <b className="text-slate-200">{((val) => (val !== undefined ? val.toFixed(2) : '0.00'))(pos.shares)}</b></span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-                      <span>Invested: <b className="text-slate-200">${((val) => (val !== undefined ? val.toFixed(2) : '0.00'))(pos.totalCost)}</b></span>
-                      <span>·</span>
-                      <span>Entry: <b className="text-slate-200">{(((pos.entryPrice || 0) * 100).toFixed(1))}¢</b></span>
-                      <span>·</span>
-                      <span>Live Price: <b className={isWin ? 'text-emerald-400' : 'text-rose-400'}>{((livePrice * 100).toFixed(1))}¢</b></span>
-                      <span>·</span>
-                      <span>Shares: {((val) => (val !== undefined ? val.toFixed(2) : '0.00'))(pos.shares)}</span>
-                      <span>·</span>
-                      <span>Fee: <b className="text-amber-400">${((val) => (val !== undefined ? val.toFixed(2) : '0.00'))(pos.buyFeePaid)}</b></span>
+
+                    <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                      <div className="text-right">
+                        <div className="text-[11px] font-semibold text-slate-400 uppercase">Floating Unrealized PnL</div>
+                        <div className={`text-2xl font-black font-mono tracking-tight ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isWin ? '+' : ''}${pnl.toFixed(2)} ({isWin ? '+' : ''}{pnlPercent}%)
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onClosePosition(pos.id)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition-all active:scale-95 shadow-sm"
+                        title="Force-close this position immediately at market"
+                      >
+                        Exit Market
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                    <div className="text-right">
-                      <div className={`text-base font-bold font-mono ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {isWin ? '+' : ''}${pnl.toFixed(2)} ({isWin ? '+' : ''}{pnlPercent}%)
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        Target: {Math.round((config.takeProfitPrice || 0.99) * 100)}¢ · Stop: -${(config.stopLossDollars || 3).toFixed(2)}
-                      </div>
+                  {/* Visual Range Meter from Stop Loss to Take Profit */}
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
+                    <div className="flex justify-between text-[11px] font-mono">
+                      <span className="text-rose-400 font-bold">Stop-Loss Floor: -$3.00 (~64¢)</span>
+                      <span className="text-slate-300 font-semibold">Mark: {(livePrice * 100).toFixed(1)}¢</span>
+                      <span className="text-emerald-400 font-bold">Take-Profit Target: 99¢ (+$0.81)</span>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => onClosePosition(pos.id)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all active:scale-95"
-                    >
-                      Exit Market
-                    </button>
+                    <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
+                      <div
+                        className={`h-full transition-all duration-300 ${isWin ? 'bg-emerald-400' : 'bg-rose-400'}`}
+                        style={{
+                          width: `${Math.max(5, Math.min(100, (((livePrice - 0.64) / (0.99 - 0.64)) * 100)))}%`
+                        }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-slate-400 text-center font-mono">
+                      Strict automation armed: Books profit at 99.0¢ spot or stops loss at -$3.00 guaranteed.
+                    </div>
                   </div>
                 </div>
               );
@@ -566,15 +666,35 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
         )}
       </div>
 
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl overflow-hidden">
-        <h3 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2">
-          Trade History Ledger
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-            {account.history.length}
-          </span>
-        </h3>
+      {/* Trade History Section with Tabs */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl overflow-hidden space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+            Trade History Ledger
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+              {account.history.filter(t => historyTab === 'all' || t.side === 'SELL').length} trades
+            </span>
+          </h3>
 
-        {account.history.length === 0 ? (
+          <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setHistoryTab('closed')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all ${historyTab === 'closed' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Completed Trades ({account.history.filter(t => t.side === 'SELL').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryTab('all')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all ${historyTab === 'all' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              All Execution Fills ({account.history.length})
+            </button>
+          </div>
+        </div>
+
+        {account.history.filter(t => historyTab === 'all' || t.side === 'SELL').length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-500">
             No closed trades recorded yet.
           </div>
@@ -584,111 +704,108 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400">
                   <th className="py-2.5 px-3">Time</th>
-                  <th className="py-2.5 px-3">Side</th>
+                  <th className="py-2.5 px-3">Type</th>
                   <th className="py-2.5 px-3">Outcome</th>
-                  <th className="py-2.5 px-3">Entry / Copy</th>
+                  <th className="py-2.5 px-3">Entry Fill</th>
                   <th className="py-2.5 px-3">Exit Price</th>
-                  <th className="py-2.5 px-3">Gross / Net Proceeds</th>
+                  <th className="py-2.5 px-3">Net Proceeds</th>
                   <th className="py-2.5 px-3">Realized PnL</th>
                   <th className="py-2.5 px-3">Fees</th>
-                  <th className="py-2.5 px-3">Reason</th>
+                  <th className="py-2.5 px-3">Exit / Trigger Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {account.history.map((tx) => {
-                  const isProfit = (tx.realizedProfitUsdc ?? 0) >= 0;
-                  const isBuy = tx.side === 'BUY';
-                  return (
-                    <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3 px-3 text-slate-400">
-                        {new Date(tx.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isBuy ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                          {tx.side}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-slate-200">
-                        {tx.outcome}
-                      </td>
-                      <td className="py-3 px-3 text-slate-300">
-                        ${((val) => {
-                          try {
-                            return (val || 0).toFixed(2);
-                          } catch (e) {
-                            console.error('Error toFixed copySizeUsdc:', val);
-                            return '0.00';
-                          }
-                        })(tx.copySizeUsdc)} @ {((val) => {
-                          try {
-                            return ((val || 0) * 100).toFixed(1);
-                          } catch (e) {
-                            console.error('Error toFixed copyPrice:', val);
-                            return '0.0';
-                          }
-                        })(tx.copyPrice)}¢
-                      </td>
-                      <td className="py-3 px-3 text-slate-300">
-                        {tx.exitPrice !== undefined ? `${((val) => {
-                          try {
-                            return (val * 100).toFixed(1);
-                          } catch (e) {
-                            console.error('Error toFixed exitPrice:', val);
-                            return '0.0';
-                          }
-                        })(tx.exitPrice)}¢` : '--'}
-                      </td>
-                      <td className="py-3 px-3 text-slate-300">
-                        {tx.netProceedsUsdc !== undefined ? `$${((val) => {
-                          try {
-                            return val.toFixed(2);
-                          } catch (e) {
-                            console.error('Error toFixed netProceedsUsdc:', val);
-                            return '0.00';
-                          }
-                        })(tx.netProceedsUsdc)}` : '--'}
-                      </td>
-                      <td className="py-3 px-3 font-bold">
-                        {tx.side === 'SELL' ? (
-                          <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                            {isProfit ? '+' : ''}${tx.realizedProfitUsdc !== undefined ? ((val) => {
-                          try {
-                            return val.toFixed(2);
-                          } catch (e) {
-                            console.error('Error toFixed realizedProfitUsdc:', val);
-                            return '0.00';
-                          }
-                        })(tx.realizedProfitUsdc) : '0.00'} ({isProfit ? '+' : ''}{tx.pnlPercent !== undefined ? tx.pnlPercent : '0.0'}%)
+                {account.history
+                  .filter(t => historyTab === 'all' || t.side === 'SELL')
+                  .map((tx) => {
+                    const isProfit = (tx.realizedProfitUsdc ?? 0) >= 0;
+                    const isSell = tx.side === 'SELL';
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3 px-3 text-slate-400">
+                          {new Date(tx.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isSell ? (isProfit ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30') : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                            {isSell ? 'CLOSED' : 'BUY'}
                           </span>
-                        ) : (
-                          <span className="text-slate-500">Filled</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 font-mono">
-                        <span className="font-semibold text-amber-300">
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-slate-200">
+                          {tx.outcome}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
                           ${((val) => {
                             try {
                               return (val || 0).toFixed(2);
                             } catch (e) {
                               return '0.00';
                             }
-                          })(tx.feeUsdc !== undefined && tx.feeUsdc > 0 ? tx.feeUsdc : ((tx.buyFeeUsdc || 0) + (tx.sellFeeUsdc || 0)))}
-                        </span>
-                        {((tx.buyFeeUsdc !== undefined && tx.buyFeeUsdc > 0) || (tx.sellFeeUsdc !== undefined && tx.sellFeeUsdc > 0)) && (
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            {tx.buyFeeUsdc ? `B: $${tx.buyFeeUsdc.toFixed(2)} ` : ''}
-                            {tx.sellFeeUsdc ? `S: $${tx.sellFeeUsdc.toFixed(2)}` : ''}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-slate-400">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-[11px] text-slate-300 font-mono">
-                          {tx.sellReason || tx.fillStatus || 'EXECUTED'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          })(tx.copySizeUsdc)} @ {((val) => {
+                            try {
+                              return ((val || 0) * 100).toFixed(1);
+                            } catch (e) {
+                              return '0.0';
+                            }
+                          })(tx.copyPrice)}¢
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          {tx.exitPrice !== undefined ? `${((val) => {
+                            try {
+                              return (val * 100).toFixed(1);
+                            } catch (e) {
+                              return '0.0';
+                            }
+                          })(tx.exitPrice)}¢` : '--'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          {tx.netProceedsUsdc !== undefined ? `$${((val) => {
+                            try {
+                              return val.toFixed(2);
+                            } catch (e) {
+                              return '0.00';
+                            }
+                          })(tx.netProceedsUsdc)}` : '--'}
+                        </td>
+                        <td className="py-3 px-3 font-bold">
+                          {tx.side === 'SELL' ? (
+                            <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
+                              {isProfit ? '+' : ''}${tx.realizedProfitUsdc !== undefined ? ((val) => {
+                            try {
+                              return val.toFixed(2);
+                            } catch (e) {
+                              return '0.00';
+                            }
+                          })(tx.realizedProfitUsdc) : '0.00'} ({isProfit ? '+' : ''}{tx.pnlPercent !== undefined ? tx.pnlPercent : '0.0'}%)
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Filled</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 font-mono">
+                          <span className="font-semibold text-amber-300">
+                            ${((val) => {
+                              try {
+                                return (val || 0).toFixed(2);
+                              } catch (e) {
+                                return '0.00';
+                              }
+                            })(tx.feeUsdc !== undefined && tx.feeUsdc > 0 ? tx.feeUsdc : ((tx.buyFeeUsdc || 0) + (tx.sellFeeUsdc || 0)))}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                            tx.sellReason?.includes('TAKE_PROFIT') || tx.sellReason?.includes('WIN')
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : tx.sellReason?.includes('STOP_LOSS') || tx.sellReason?.includes('LOSS')
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}>
+                            {tx.sellReason || tx.fillStatus || 'EXECUTED'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
