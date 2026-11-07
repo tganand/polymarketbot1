@@ -52,7 +52,7 @@ process.on('uncaughtException', (err) => {
 
 const app = express();
 const server = http.createServer(app);
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 // Preset target traders available for 1-click copy trading & tracking
 const PRESET_TRADERS = [
@@ -1278,7 +1278,31 @@ function evaluateMomentumStrategy(symbol: string) {
       : 0;
     const assetLivePrice = livePrices[thisAsset] || livePrices[key] || 0;
 
-    // Gather all valid live incoming price signals across CLOB book, feeds, and window
+    // In binary prediction markets, outcome + opposite = 1.00
+    // If opposite contract is trading high (e.g. 99¢), this contract is 1¢ (0.01)!
+    const impliedFromOpp = (oppOutcomePrice !== undefined && oppOutcomePrice > 0)
+      ? Number(Math.max(0.005, 1.0 - oppOutcomePrice).toFixed(4))
+      : undefined;
+
+    // Hard ceiling for exit price: cannot exceed (1.0 - oppositePrice)
+    const oppCap = impliedFromOpp !== undefined ? impliedFromOpp : 1.0;
+
+    // Direct exit price: order book bid, window price, or implied from opposite
+    let currentExitPrice: number;
+    if (bestBid > 0) {
+      currentExitPrice = Math.min(bestBid, oppCap);
+    } else if (windowOutcomePrice !== undefined && windowOutcomePrice > 0) {
+      currentExitPrice = Math.min(windowOutcomePrice, oppCap);
+    } else if (impliedFromOpp !== undefined) {
+      currentExitPrice = impliedFromOpp;
+    } else if (lastPrice > 0) {
+      currentExitPrice = Math.min(lastPrice, oppCap);
+    } else {
+      currentExitPrice = Math.min(pos.currentPrice || pos.entryPrice, oppCap);
+    }
+    currentExitPrice = Math.max(0.005, Math.min(1.0, currentExitPrice));
+
+    // Gather all valid live incoming price signals for take-profit detection
     const validPrices = [
       windowOutcomePrice,
       assetLivePrice > 0 ? assetLivePrice : undefined,
@@ -1289,16 +1313,9 @@ function evaluateMomentumStrategy(symbol: string) {
       (oppOutcomePrice !== undefined && oppOutcomePrice <= 0.02) ? (1.0 - oppOutcomePrice) : undefined,
     ].filter((p): p is number => typeof p === 'number' && !isNaN(p) && p > 0);
 
-    const maxMarketPrice = validPrices.length > 0 ? Math.max(...validPrices) : (pos.currentPrice || pos.entryPrice);
+    const maxMarketPrice = validPrices.length > 0 ? Math.max(...validPrices) : currentExitPrice;
     
-    // Genuine exit price for stop loss (best bid, last traded, or live window)
-    const currentExitPrice = bestBid > 0
-      ? bestBid
-      : (lastPrice > 0
-        ? lastPrice
-        : (windowOutcomePrice ?? (oppOutcomePrice !== undefined && oppOutcomePrice > 0 ? (1.0 - oppOutcomePrice) : (bestAsk > 0 ? bestAsk : pos.currentPrice))));
-
-    // If any indicator signals >= 98.5¢ (e.g. 99¢, 100¢ / 1.00, or opposite is 1¢), market target reached!
+    // If any indicator signals >= 98.5¢, target reached! Otherwise use currentExitPrice
     const realPrice = maxMarketPrice >= 0.985 ? maxMarketPrice : currentExitPrice;
 
     if (realPrice > 0) {
@@ -1322,7 +1339,14 @@ function evaluateMomentumStrategy(symbol: string) {
         delete momentumAccounts[symbol].positions[key];
         delete account.positions[key];
         flushState();
-        broadcastSSE({ type: 'momentum_account_update', symbol, account: momentumAccounts[symbol], metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) });
+        broadcastSSE({
+          type: 'momentum_account_update',
+          symbol,
+          account: momentumAccounts[symbol],
+          metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+          momentumAccounts,
+          momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+        });
       }
       continue;
     }
@@ -1332,9 +1356,11 @@ function evaluateMomentumStrategy(symbol: string) {
     const lossFromReal = pos.totalCost - (pos.shares * realPrice);
     const posLoss = Math.max(lossFromExit, lossFromReal, -pos.unrealizedPnl);
     const slThreshold = Math.min(maxLoss, 3.00);
-    if (posLoss >= (slThreshold - 0.05)) {
+    // Trigger if loss >= $2.95 OR if opposite outcome has reached >= 91¢ (confirming reversal)
+    const oppositeReversed = oppOutcomePrice !== undefined && oppOutcomePrice >= 0.90;
+    if (posLoss >= (slThreshold - 0.05) || oppositeReversed) {
       const exitPrice = Math.max(0.01, Number(((pos.totalCost - slThreshold) / pos.shares).toFixed(4)));
-      console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: ${posLoss}. Exiting @ $${slThreshold.toFixed(2)} loss strictly booked.`);
+      console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: $${posLoss.toFixed(2)} (oppPrice: ${oppOutcomePrice}). Exiting @ $${slThreshold.toFixed(2)} loss strictly booked.`);
       const res = executeInternalSell(account, key, 1.0, '15M_STOP_LOSS_$3.00', exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m SL ERROR]`, res.error);
       else {
@@ -1342,7 +1368,14 @@ function evaluateMomentumStrategy(symbol: string) {
         delete momentumAccounts[symbol].positions[key];
         delete account.positions[key];
         flushState();
-        broadcastSSE({ type: 'momentum_account_update', symbol, account: momentumAccounts[symbol], metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) });
+        broadcastSSE({
+          type: 'momentum_account_update',
+          symbol,
+          account: momentumAccounts[symbol],
+          metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+          momentumAccounts,
+          momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+        });
       }
       continue;
     }
@@ -1354,11 +1387,36 @@ function evaluateMomentumStrategy(symbol: string) {
     momentumAccounts[symbol] = autoClosePastWindowPositions(account, Math.floor(activeWindow.startDate / 1000), livePrices);
     if (account.history.length > histBefore) {
       flushState();
+      broadcastSSE({
+        type: 'momentum_account_update',
+        symbol,
+        account: momentumAccounts[symbol],
+        metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+        momentumAccounts,
+        momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+      });
     }
+  }
+
+  // 2.5 Live position mark-to-market broadcast for floating unrealized PnL
+  if (Object.keys(account.positions).length > 0 && now - lastSseBroadcastTime >= 500) {
+    lastSseBroadcastTime = now;
+    broadcastSSE({
+      type: 'momentum_account_update',
+      symbol,
+      account: momentumAccounts[symbol],
+      metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+      momentumAccounts,
+      momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+    });
   }
 
   // 3. Entry & Time-Left Filters
   if (!activeWindow || !activeWindow.upTokenId || !activeWindow.downTokenId) return;
+  // NEVER enter if less than 60 seconds remain in window (prevents entering into expiry whipsaws)
+  if (activeWindow.timeLeftSeconds !== undefined && activeWindow.timeLeftSeconds < 60) {
+    return;
+  }
   const currentUpAsset = activeWindow.upTokenId;
   const currentDownAsset = activeWindow.downTokenId;
   const windowSlug = activeWindow.slug;
@@ -1401,6 +1459,14 @@ function evaluateMomentumStrategy(symbol: string) {
         tradedWindows.add(windowSlug);
         crossedThresholdTime[currentUpAsset] = 0;
         flushState();
+        broadcastSSE({
+          type: 'momentum_account_update',
+          symbol,
+          account: momentumAccounts[symbol],
+          metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+          momentumAccounts,
+          momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+        });
         console.log(`[${symbol} 15m NEW RULE EXECUTED] Successfully bought single trade: $10 UP @ $${upPrice.toFixed(2)}. Target exit: 99¢. Stop loss: $3.00.`);
       }
       return;
@@ -1436,6 +1502,14 @@ function evaluateMomentumStrategy(symbol: string) {
         tradedWindows.add(windowSlug);
         crossedThresholdTime[currentDownAsset] = 0;
         flushState();
+        broadcastSSE({
+          type: 'momentum_account_update',
+          symbol,
+          account: momentumAccounts[symbol],
+          metrics: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices),
+          momentumAccounts,
+          momentumMetrics: { [symbol]: calculatePortfolioMetrics(momentumAccounts[symbol], livePrices) },
+        });
         console.log(`[${symbol} 15m NEW RULE EXECUTED] Successfully bought single trade: $10 DOWN @ $${downPrice.toFixed(2)}. Target exit: 99¢. Stop loss: $3.00.`);
       }
       return;

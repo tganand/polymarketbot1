@@ -566,10 +566,7 @@ export function calculatePortfolioMetrics(
   const cashBasedPnl = Number((account.cashBalance + activePositionsCost - account.initialBalance).toFixed(2));
   const resolvedRealizedPnl = Math.max(cashBasedPnl, historyCumulativeNet);
 
-  const resolvedCashBalance = Math.max(
-    Number(account.cashBalance.toFixed(2)),
-    Number((account.initialBalance + resolvedRealizedPnl - activePositionsCost).toFixed(2))
-  );
+  const resolvedCashBalance = Number((account.initialBalance + resolvedRealizedPnl - activePositionsCost).toFixed(2));
 
   const totalPortfolioValue = Number((resolvedCashBalance + activePositionsValue).toFixed(4));
   const totalPnl = Number((totalPortfolioValue - account.initialBalance).toFixed(4));
@@ -637,9 +634,7 @@ export function reconcilePaperAccount(account: PaperAccount): PaperAccount {
 
   // Reconcile cash balance: initial capital + total genuine profit - cost currently tied up in open positions
   const expectedCashFloor = Number((account.initialBalance + account.totalRealizedPnl - activeCost).toFixed(2));
-  if (account.cashBalance < expectedCashFloor) {
-    account.cashBalance = expectedCashFloor;
-  }
+  account.cashBalance = expectedCashFloor;
 
   // Reconcile total fees
   const historyFees = account.history.reduce((sum, t: any) => {

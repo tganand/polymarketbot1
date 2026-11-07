@@ -124,6 +124,18 @@ export default function App() {
         if (data.momentumAccounts) {
           setMomentumAccounts(data.momentumAccounts);
         }
+        if (data.type === 'momentum_account_update' && data.symbol && data.account) {
+          setMomentumAccounts((prev) => ({
+            ...prev,
+            [data.symbol]: data.account,
+          }));
+          if (data.metrics) {
+            setMomentumMetrics((prev) => ({
+              ...prev,
+              [data.symbol]: data.metrics,
+            }));
+          }
+        }
         if (data.momentumConfigs) {
           setMomentumConfigs(data.momentumConfigs);
         }

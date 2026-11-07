@@ -509,7 +509,9 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
           <div className="space-y-4">
             {openPositions.map((pos) => {
               const book = marketBooks[pos.asset];
-              const livePrice = book?.bestBid || book?.lastPrice || pos.currentPrice || 0;
+              const livePrice = (pos.currentPrice !== undefined && pos.currentPrice > 0)
+                ? pos.currentPrice
+                : (book?.bestBid || book?.lastPrice || pos.entryPrice || 0);
               const pnl = Number(((pos.shares || 0) * livePrice - (pos.totalCost || 0)).toFixed(2));
               const pnlPercent = Number(((((livePrice || 0) - (pos.entryPrice || 0)) / (pos.entryPrice || 1)) * 100).toFixed(1));
               const isWin = pnl >= 0;
