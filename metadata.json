@@ -1,0 +1,6 @@
+{
+  "name": "Polymarket 91/99 Sniper & Copy Trade Bot",
+  "description": "Autonomous Polymarket trading bot executing $10 entries at 91¢ with strict 99¢ profit target and $3 stop-loss, live CLOB orderbook streaming, whale tracker, and 24/7 VPS daemon mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
