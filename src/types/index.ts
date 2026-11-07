@@ -195,6 +195,7 @@ export interface PortfolioMetrics {
   totalPnlPercent: number;
   openPositionsCount: number;
   totalTradesCount: number;
+  closedTradesCount?: number;
   winningTrades: number;
   losingTrades: number;
   winRate: number;

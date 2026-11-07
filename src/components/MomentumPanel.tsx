@@ -397,7 +397,7 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
           </div>
           <div className="mt-2.5 flex items-baseline gap-2">
             <span className="text-xl sm:text-2xl font-bold font-mono text-slate-100">
-              ${((val) => (val !== undefined ? val.toFixed(2) : '100.00'))(account.cashBalance)}
+              ${((val) => (val !== undefined ? val.toFixed(2) : '100.00'))(metrics.cashBalance ?? account.cashBalance)}
             </span>
           </div>
           <div className="mt-1 text-[11px] sm:text-xs text-slate-500 font-mono">
@@ -415,7 +415,7 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
           </div>
           <div className="mt-2.5 flex items-baseline gap-2">
             {(() => {
-              const pnl = (metrics.realizedPnl !== undefined && !isNaN(metrics.realizedPnl) && metrics.realizedPnl !== 0)
+              const pnl = (metrics.realizedPnl !== undefined && !isNaN(metrics.realizedPnl))
                 ? metrics.realizedPnl
                 : (account.totalRealizedPnl !== undefined && !isNaN(account.totalRealizedPnl))
                 ? account.totalRealizedPnl
@@ -482,7 +482,7 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
             </span>
           </div>
           <div className="mt-1 text-[11px] sm:text-xs text-slate-500 font-mono">
-            {metrics.winningTrades}W · {metrics.losingTrades}L ({account.totalTrades} closed)
+            {metrics.winningTrades}W · {metrics.losingTrades}L ({metrics.closedTradesCount ?? (metrics.winningTrades + metrics.losingTrades)} closed)
           </div>
         </div>
       </div>

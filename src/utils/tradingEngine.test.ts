@@ -12,6 +12,7 @@ import {
   countWindowBuysForSide,
   computeClosedPositionStats,
   executeInternalSell,
+  reconcilePaperAccount,
 } from './tradingEngine';
 import { PolymarketActivityItem, OrderBookState } from '../types';
 
@@ -993,6 +994,89 @@ test('dynamic risk scaling: single or hedged Up+Down trades use 40% stop loss, 2
   assert.ok(posUp);
   assert.equal(posUp.totalCost, 20);
   assert.equal(posUp.buyCount, 2);
+});
+
+test('reconcilePaperAccount recovers cash and anchors realized PnL to history ledger after server restart/crash', () => {
+  // Simulate user's exact VPS state: $100 starting capital, 16 winning trades totaling +$14.14,
+  // followed by an orphaned BUY that deducted $10.04 before a crash.
+  const account = createInitialAccount(100);
+
+  // Synthesize 16 completed winning trades totaling +$14.14
+  const profits = [0.81, 0.93, 0.93, 0.49, 0.86, 0.93, 1.16, 0.81, 0.93, 0.93, 0.49, 0.86, 0.93, 1.16, 0.96, 0.96];
+  for (let i = 0; i < profits.length; i++) {
+    const pnl = profits[i];
+    const tradeId = `trade_${i}`;
+    account.history.push({
+      id: `sell_${tradeId}`,
+      positionId: `pos_${tradeId}`,
+      side: 'SELL',
+      outcome: 'Down',
+      title: 'Bitcoin Up or Down',
+      copyShares: 10,
+      copyPrice: 0.99,
+      copySizeUsdc: 9.90,
+      grossProceedsUsdc: 9.90,
+      netProceedsUsdc: 9.89,
+      realizedProfitUsdc: pnl,
+      pnlUsdc: pnl,
+      feeUsdc: 0.01,
+      status: 'CLOSED',
+      timestamp: 1731000000 + i * 900,
+    } as any);
+
+    account.history.push({
+      id: `buy_${tradeId}`,
+      positionId: `pos_${tradeId}`,
+      side: 'BUY',
+      outcome: 'Down',
+      title: 'Bitcoin Up or Down',
+      copyShares: 10,
+      copyPrice: 0.90,
+      copySizeUsdc: 9.00,
+      feeUsdc: 0.05,
+      status: 'FILLED',
+      timestamp: 1731000000 + i * 900 - 300,
+    } as any);
+  }
+
+  // Add 1 orphaned BUY with no SELL and no open position in account.positions
+  account.history.unshift({
+    id: 'buy_orphaned_17',
+    positionId: 'pos_orphaned_17',
+    side: 'BUY',
+    outcome: 'Down',
+    title: 'Bitcoin Up or Down',
+    copyShares: 10.526,
+    copyPrice: 0.95,
+    copySizeUsdc: 10.00,
+    feeUsdc: 0.04,
+    status: 'FILLED',
+    timestamp: 1731013106,
+  } as any);
+
+  // Cash was depressed to $104.09 on VPS due to the orphaned $10.04 BUY and crash:
+  account.cashBalance = 104.09;
+  account.totalRealizedPnl = 4.09;
+  account.positions = {}; // empty open positions
+  account.totalTrades = 17;
+
+  // 1. Reconcile account
+  const reconciled = reconcilePaperAccount(account);
+
+  // Assert cash balance is restored to full initial ($100.00) + cumulative ledger profit ($14.14) = $114.14
+  assert.equal(reconciled.cashBalance, 114.14, 'Cash balance must be restored to $114.14 based on ledger audit');
+  assert.equal(reconciled.totalRealizedPnl, 14.14, 'Realized PnL must be +$14.14');
+  assert.equal(reconciled.winningTrades, 16, 'Winning trades must be 16');
+  assert.equal(reconciled.losingTrades, 0, 'Losing trades must be 0');
+
+  // 2. Metrics check
+  const metrics = calculatePortfolioMetrics(reconciled);
+  assert.equal(metrics.cashBalance, 114.14);
+  assert.equal(metrics.realizedPnl, 14.14);
+  assert.equal(metrics.winRate, 100.0);
+  assert.equal(metrics.winningTrades, 16);
+  assert.equal(metrics.losingTrades, 0);
+  assert.equal(metrics.closedTradesCount, 16);
 });
 
 

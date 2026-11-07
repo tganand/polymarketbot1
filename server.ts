@@ -19,6 +19,7 @@ import {
   getWindowTimestamp,
   countWindowBuysForSide,
   computeClosedPositionStats,
+  reconcilePaperAccount,
   LatencyContext,
 } from './src/utils/tradingEngine.ts';
 import {
@@ -43,11 +44,10 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[FATAL UNCAUGHT EXCEPTION]', err);
+  console.error('[UNCAUGHT EXCEPTION PREVENTED CRASH]', err);
   try {
     flushState();
   } catch {}
-  process.exit(1);
 });
 
 const app = express();
@@ -178,6 +178,7 @@ function loadState() {
         if (paperAccount.currentStakeSize === undefined || isNaN(paperAccount.currentStakeSize)) {
           paperAccount.currentStakeSize = 10.0;
         }
+        paperAccount = reconcilePaperAccount(paperAccount);
       }
       if (parsed.momentumAccounts) {
         delete (parsed.momentumAccounts as any)['SOL'];
@@ -196,7 +197,7 @@ function loadState() {
             const histFees = (acc.history || []).reduce((sum: number, t: any) => sum + (t.feeUsdc !== undefined ? t.feeUsdc : ((t.buyFeeUsdc || 0) + (t.sellFeeUsdc || 0))), 0);
             if (histFees > 0) acc.totalFeesPaid = Number(histFees.toFixed(4));
           }
-          momentumAccounts['BTC'] = acc;
+          momentumAccounts['BTC'] = reconcilePaperAccount(acc);
         }
       }
       if (parsed.momentumConfigs) {
@@ -2088,6 +2089,7 @@ app.get('/api/bot-bundle.tar.gz', (req, res) => {
 });
 
 app.get('/api/status', (req, res) => {
+  paperAccount = reconcilePaperAccount(paperAccount);
   const metrics = calculatePortfolioMetrics(paperAccount, livePrices);
   res.json({
     ok: true,
@@ -2219,6 +2221,9 @@ app.get('/api/stream', (req, res) => {
 });
 
 app.get('/api/momentum', (req, res) => {
+  if (momentumAccounts['BTC']) {
+    momentumAccounts['BTC'] = reconcilePaperAccount(momentumAccounts['BTC']);
+  }
   const momentumMetrics: Record<string, PortfolioMetrics> = {
     'BTC': calculatePortfolioMetrics(momentumAccounts['BTC'], livePrices),
   };

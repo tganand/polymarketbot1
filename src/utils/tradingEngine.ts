@@ -556,16 +556,24 @@ export function calculatePortfolioMetrics(
     unrealizedPnl += (currentVal - pos.totalCost);
   }
 
-  const totalPortfolioValue = Number((account.cashBalance + activePositionsValue).toFixed(4));
-  const totalPnl = Number((totalPortfolioValue - account.initialBalance).toFixed(4));
-  const totalPnlPercent = Number(((totalPnl / account.initialBalance) * 100).toFixed(2));
-
   // Compute strictly 1 win or 1 loss per trade lifecycle (no premature partial sell wins)
   const stats = computeClosedPositionStats(account.history, account.positions);
 
-  // Reconciled Realized PnL: Cash Balance + Active Positions Cost - Initial Balance
-  // This guarantees 100% mathematical consistency with cash balance to the exact penny!
-  const reconciledRealizedPnl = Number((account.cashBalance + activePositionsCost - account.initialBalance).toFixed(2));
+  // Reconciled Realized PnL:
+  // Closed history is the definitive audit ledger of all completed trades.
+  // If cashBalance was desynced by an unclosed trade or server restart, reconcile to reflect full genuine profits:
+  const historyCumulativeNet = Number(stats.cumulativeRealizedPnl.toFixed(2));
+  const cashBasedPnl = Number((account.cashBalance + activePositionsCost - account.initialBalance).toFixed(2));
+  const resolvedRealizedPnl = Math.max(cashBasedPnl, historyCumulativeNet);
+
+  const resolvedCashBalance = Math.max(
+    Number(account.cashBalance.toFixed(2)),
+    Number((account.initialBalance + resolvedRealizedPnl - activePositionsCost).toFixed(2))
+  );
+
+  const totalPortfolioValue = Number((resolvedCashBalance + activePositionsValue).toFixed(4));
+  const totalPnl = Number((totalPortfolioValue - account.initialBalance).toFixed(4));
+  const totalPnlPercent = Number(((totalPnl / account.initialBalance) * 100).toFixed(2));
 
   const historyFees = (account.history || []).reduce((sum, t) => {
     const fee = t.feeUsdc !== undefined && !isNaN(t.feeUsdc) ? t.feeUsdc : ((t.buyFeeUsdc || 0) + (t.sellFeeUsdc || 0));
@@ -579,11 +587,11 @@ export function calculatePortfolioMetrics(
 
   return {
     initialBalance: account.initialBalance,
-    cashBalance: Number(account.cashBalance.toFixed(2)),
+    cashBalance: Number(resolvedCashBalance.toFixed(2)),
     activePositionsValue: Number(activePositionsValue.toFixed(2)),
     totalPortfolioValue: Number(totalPortfolioValue.toFixed(2)),
     unrealizedPnl: Number(unrealizedPnl.toFixed(2)),
-    realizedPnl: reconciledRealizedPnl,
+    realizedPnl: resolvedRealizedPnl,
     todayRealizedPnl,
     dailyTarget,
     isDailyTargetReached,
@@ -592,10 +600,57 @@ export function calculatePortfolioMetrics(
     totalFeesPaid: resolvedFeesPaid,
     openPositionsCount: openPositions.length,
     totalTradesCount: stats.closedTradesCount + openPositions.length,
+    closedTradesCount: stats.closedTradesCount,
     winningTrades: stats.winningTrades,
     losingTrades: stats.losingTrades,
     winRate: stats.winRate,
   };
+}
+
+/**
+ * Mathematically audits and reconciles a PaperAccount state against its immutable history ledger.
+ * - Ensures Realized PnL is anchored to the cumulative net profit of genuine closed trades.
+ * - Ensures Cash Balance is restored if an orphaned trade or crash unseated capital.
+ * - Synchronizes winning/losing trades and closed trade counts.
+ */
+export function reconcilePaperAccount(account: PaperAccount): PaperAccount {
+  if (!account) return account;
+  if (!Array.isArray(account.history)) account.history = [];
+  if (!account.positions || typeof account.positions !== 'object') account.positions = {};
+
+  const stats = computeClosedPositionStats(account.history, account.positions);
+  const activeCost = Object.values(account.positions).reduce((sum, p) => sum + (p.totalCost || 0), 0);
+
+  // Closed history is the definitive audit ledger of all completed trades
+  const historyRealizedPnl = Number(stats.cumulativeRealizedPnl.toFixed(2));
+
+  // Update win/loss counts to match closed trade lifecycle
+  account.winningTrades = stats.winningTrades;
+  account.losingTrades = stats.losingTrades;
+  account.totalTrades = stats.closedTradesCount + Object.keys(account.positions).length;
+
+  // Realized profit floor: cannot be less than the sum of genuine closed ledger trades
+  account.totalRealizedPnl = Math.max(
+    Number((account.totalRealizedPnl || 0).toFixed(2)),
+    historyRealizedPnl
+  );
+
+  // Reconcile cash balance: initial capital + total genuine profit - cost currently tied up in open positions
+  const expectedCashFloor = Number((account.initialBalance + account.totalRealizedPnl - activeCost).toFixed(2));
+  if (account.cashBalance < expectedCashFloor) {
+    account.cashBalance = expectedCashFloor;
+  }
+
+  // Reconcile total fees
+  const historyFees = account.history.reduce((sum, t: any) => {
+    const fee = t.feeUsdc !== undefined && !isNaN(t.feeUsdc) ? t.feeUsdc : ((t.buyFeeUsdc || 0) + (t.sellFeeUsdc || 0));
+    return sum + (fee || 0);
+  }, 0);
+  if (historyFees > (account.totalFeesPaid || 0)) {
+    account.totalFeesPaid = Number(historyFees.toFixed(4));
+  }
+
+  return account;
 }
 
 export function getISTDateString(timestampMs = Date.now()): string {

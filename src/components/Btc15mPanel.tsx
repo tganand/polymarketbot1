@@ -327,7 +327,7 @@ export const Btc15mPanel: React.FC<Btc15mPanelProps> = ({
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-slate-100">
-              ${account.cashBalance.toFixed(2)}
+              ${(metrics.cashBalance ?? account.cashBalance).toFixed(2)}
             </span>
           </div>
           <div className="mt-1 text-xs text-slate-500 font-mono">
@@ -367,7 +367,7 @@ export const Btc15mPanel: React.FC<Btc15mPanelProps> = ({
             </span>
           </div>
           <div className="mt-1 text-xs text-slate-500 font-mono">
-            {metrics.winningTrades}W · {metrics.losingTrades}L ({account.totalTrades} closed)
+            {metrics.winningTrades}W · {metrics.losingTrades}L ({metrics.closedTradesCount ?? (metrics.winningTrades + metrics.losingTrades)} closed)
           </div>
         </div>
 
