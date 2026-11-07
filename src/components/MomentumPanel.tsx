@@ -704,7 +704,7 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
             <p className="text-xs text-slate-400 mt-0.5">Live strategy rules, risk parameters, and recent updates deployed to the bot.</p>
           </div>
           <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
-            V3.2 Production Live
+            V3.4 Production Live
           </span>
         </div>
 
@@ -718,9 +718,9 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
           </div>
           <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
             <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-              <span>⚡</span> 99¢ Exit On The Spot
+              <span>⚡</span> 99¢ / 100¢ Exit On The Spot
             </div>
-            <p className="text-slate-400">Instantly sells 100% of the position on the spot when live CLOB order book price genuinely reaches <strong>99¢</strong>.</p>
+            <p className="text-slate-400">Instantly force-closes 100% of the position on the spot when live market price touches <strong>≥ 99¢ or 100¢</strong>. Books 99¢ net profit immediately.</p>
           </div>
           <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
             <div className="font-bold text-rose-400 flex items-center gap-1.5">
@@ -742,13 +742,28 @@ export const MomentumPanel: React.FC<MomentumPanelProps> = ({
             <span>📋</span> Change History & Deployed Updates
           </h4>
           <div className="divide-y divide-slate-800/60 bg-slate-950/40 rounded-xl border border-slate-800/60 text-xs">
-            <div className="p-3.5 space-y-1">
+            <div className="p-3.5 space-y-1 bg-emerald-950/15">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-emerald-400 flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono">V3.3</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-mono">V3.4</span>
+                  Instant 99¢ & 100¢ Force-Exit Fix (Zero Delay Settlement)
+                </span>
+                <span className="text-[10px] text-emerald-400 font-mono font-bold animate-pulse">Latest Deployed</span>
+              </div>
+              <ul className="text-slate-300 space-y-1 list-disc list-inside text-[11px] pl-1">
+                <li><strong>Fixed 100¢ / 99¢ Exit Trigger:</strong> Fixed orderbook bid precedence where stale 1¢ bids on winning tokens delayed exit. Now checks aggregated window outcome prices, CLOB asks, last trades, and opposite-token resolution signals.</li>
+                <li><strong>Instant Force Close:</strong> As soon as an active position touches ≥ 99¢ or 100¢ (1.00), the bot triggers immediate force-exit at 99¢ and books profit without waiting for market settlement.</li>
+                <li><strong>Manual Exit Hotfix:</strong> Manual "Exit Market" button now also books 99¢ strictly when market price is ≥ 98.5¢.</li>
+              </ul>
+            </div>
+
+            <div className="p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono">V3.3</span>
                   91¢ Sniper Entry, 99¢ Strict Profit Target & $3.00 Stop Loss Execution
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">Latest Update</span>
+                <span className="text-[10px] text-slate-500 font-mono">Previous Update</span>
               </div>
               <ul className="text-slate-400 space-y-1 list-disc list-inside text-[11px] pl-1">
                 <li><strong>91¢ Breakout Trigger:</strong> Bot enters strictly 1 trade of $10.00 on any side (UP or DOWN) the moment CLOB prices touch ≥ 91¢.</li>

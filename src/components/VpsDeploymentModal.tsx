@@ -49,10 +49,10 @@ sudo apt install -y nodejs
 sudo npm install -g pm2 tsx
 
 echo "📥 [3/6] Cloning Polymarket Bot..."
-if [ ! -d "Copy-trade-bot" ]; then
-  git clone https://github.com/tganand/Copy-trade-bot.git
+if [ ! -d "polymarketbot1" ]; then
+  git clone https://github.com/tganand/polymarketbot1.git
 fi
-cd Copy-trade-bot
+cd polymarketbot1
 
 echo "⚙️ [4/6] Installing dependencies..."
 npm install
@@ -85,8 +85,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/Copy-trade-bot
-ExecStart=/usr/bin/npx tsx /root/Copy-trade-bot/server.ts
+WorkingDirectory=/root/polymarketbot1
+ExecStart=/usr/bin/npx tsx /root/polymarketbot1/server.ts
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
@@ -251,13 +251,13 @@ WantedBy=multi-user.target
                 </div>
                 <div className="relative bg-slate-950 rounded-xl p-3 font-mono text-[11px] text-slate-200 border border-slate-800 leading-relaxed">
                   <code>
-                    git clone https://github.com/tganand/Copy-trade-bot.git<br />
-                    cd Copy-trade-bot<br />
+                    git clone https://github.com/tganand/polymarketbot1.git<br />
+                    cd polymarketbot1<br />
                     npm install
                   </code>
                   <button
                     type="button"
-                    onClick={() => handleCopy('step3', 'git clone https://github.com/tganand/Copy-trade-bot.git\ncd Copy-trade-bot\nnpm install')}
+                    onClick={() => handleCopy('step3', 'git clone https://github.com/tganand/polymarketbot1.git\ncd polymarketbot1\nnpm install')}
                     className="absolute right-2 top-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
                     title="Copy command"
                   >
@@ -358,11 +358,11 @@ WantedBy=multi-user.target
 
               <div className="relative bg-slate-950 rounded-xl p-3.5 font-mono text-[11px] text-emerald-400 border border-slate-800">
                 <code>
-                  curl -sSL https://raw.githubusercontent.com/tganand/Copy-trade-bot/main/deploy-vps.sh | bash
+                  curl -sSL https://raw.githubusercontent.com/tganand/polymarketbot1/main/deploy-vps.sh | bash
                 </code>
                 <button
                   type="button"
-                  onClick={() => handleCopy('oneshot', 'curl -sSL https://raw.githubusercontent.com/tganand/Copy-trade-bot/main/deploy-vps.sh | bash')}
+                  onClick={() => handleCopy('oneshot', 'curl -sSL https://raw.githubusercontent.com/tganand/polymarketbot1/main/deploy-vps.sh | bash')}
                   className="absolute right-2 top-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
                   title="Copy command"
                 >

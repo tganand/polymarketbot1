@@ -1259,16 +1259,39 @@ function evaluateMomentumStrategy(symbol: string) {
     const thisAsset = pos.asset;
     const thisBook = marketBooks[thisAsset];
 
-    // Real live price signals strictly from CLOB order book and live stream
+    // Real live price signals strictly from CLOB order book, window prices, and live stream
     const bestBid = thisBook && thisBook.bestBid > 0 ? thisBook.bestBid : 0;
     const bestAsk = thisBook && thisBook.bestAsk > 0 ? thisBook.bestAsk : 0;
     const lastPrice = thisBook && thisBook.lastPrice > 0 ? thisBook.lastPrice : 0;
+    const windowOutcomePrice = (activeWindow && (activeWindow.slug === pos.slug || activeWindow.conditionId === pos.conditionId))
+      ? (isUp ? upPrice : downPrice)
+      : undefined;
+    const oppOutcomePrice = (activeWindow && (activeWindow.slug === pos.slug || activeWindow.conditionId === pos.conditionId))
+      ? (isUp ? downPrice : upPrice)
+      : undefined;
     const gammaPrice = (activeWindow && (activeWindow.slug === pos.slug || activeWindow.conditionId === pos.conditionId) && activeWindow.outcomePrices && activeWindow.outcomePrices.length >= 2)
       ? (isUp ? activeWindow.outcomePrices[0] : activeWindow.outcomePrices[1])
       : 0;
+    const assetLivePrice = livePrices[thisAsset] || livePrices[key] || 0;
 
-    // Real price: genuine live quote
-    const realPrice = bestBid > 0 ? bestBid : (lastPrice > 0 ? lastPrice : (bestAsk > 0 ? bestAsk : (gammaPrice > 0 ? gammaPrice : (pos.currentPrice > 0 ? pos.currentPrice : pos.entryPrice))));
+    // Gather all valid price signals across CLOB book, feeds, and window
+    const validPrices = [
+      windowOutcomePrice,
+      assetLivePrice > 0 ? assetLivePrice : undefined,
+      bestAsk > 0 ? bestAsk : undefined,
+      lastPrice > 0 ? lastPrice : undefined,
+      bestBid > 0 ? bestBid : undefined,
+      gammaPrice > 0 ? gammaPrice : undefined,
+      (oppOutcomePrice !== undefined && oppOutcomePrice <= 0.02) ? (1.0 - oppOutcomePrice) : undefined,
+      pos.currentPrice > 0 ? pos.currentPrice : undefined,
+    ].filter((p): p is number => typeof p === 'number' && !isNaN(p) && p > 0);
+
+    const maxMarketPrice = validPrices.length > 0 ? Math.max(...validPrices) : (pos.currentPrice || pos.entryPrice);
+    const standardPrice = windowOutcomePrice ?? (lastPrice > 0 ? lastPrice : (bestAsk > 0 ? bestAsk : (bestBid > 0 ? bestBid : (pos.currentPrice || pos.entryPrice))));
+
+    // If any indicator signals >= 98.5¢ (e.g. 99¢, 100¢ / 1.00, or opposite is 1¢), market target reached!
+    const realPrice = maxMarketPrice >= 0.985 ? maxMarketPrice : standardPrice;
+
     if (realPrice > 0) {
       pos.currentPrice = realPrice;
       pos.currentValue = Number((pos.shares * realPrice).toFixed(4));
@@ -1282,10 +1305,10 @@ function evaluateMomentumStrategy(symbol: string) {
     const tpPrice = config.takeProfitPrice || 0.99;
     const maxLoss = config.stopLossDollars || 3.00;
 
-    // A. TAKE-PROFIT: Exit strictly on 99¢ (or higher)
-    if (currentPrice >= tpPrice) {
-      console.log(`🎯 [${symbol} 15m FORCE-CLOSE TP] ${pos.title} (${pos.outcome}) Price: ${currentPrice}. Exiting @ ${tpPrice} (99¢ TARGET BOOKED).`);
-      const res = executeInternalSell(account, key, 1.0, 'TAKE_PROFIT_99¢_SPOT', tpPrice, DEFAULT_TAKER_FEE_RATE, 'assumed', thisBook);
+    // A. TAKE-PROFIT: Exit strictly when price is >= 99¢ (0.99, 1.00, or configured TP)
+    if (currentPrice >= (tpPrice - 0.005) || maxMarketPrice >= (tpPrice - 0.005) || currentPrice >= 0.99 || maxMarketPrice >= 0.99) {
+      console.log(`🎯 [${symbol} 15m FORCE-CLOSE TP] ${pos.title} (${pos.outcome}) Price: ${currentPrice} (max: ${maxMarketPrice}). Exiting @ 99¢ strictly booked.`);
+      const res = executeInternalSell(account, key, 1.0, 'TAKE_PROFIT_99¢_SPOT', 0.99, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m TP ERROR]`, res.error);
       else {
         momentumAccounts[symbol] = res.account;
@@ -1299,7 +1322,7 @@ function evaluateMomentumStrategy(symbol: string) {
     if (unrealizedLoss >= maxLoss) {
       const exitPrice = Math.max(0.01, Number(((pos.totalCost - maxLoss) / pos.shares).toFixed(4)));
       console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: ${unrealizedLoss}. Exiting @ $${maxLoss.toFixed(2)} loss.`);
-      const res = executeInternalSell(account, key, 1.0, '15M_STOP_LOSS_$3.00', exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed', thisBook);
+      const res = executeInternalSell(account, key, 1.0, '15M_STOP_LOSS_$3.00', exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m SL ERROR]`, res.error);
       else {
         momentumAccounts[symbol] = res.account;
@@ -2241,8 +2264,10 @@ app.post('/api/momentum/:symbol/close-position', (req, res) => {
   const account = momentumAccounts[symbol];
   const pos = account.positions[positionId];
   const book = marketBooks[pos.asset];
-  const livePrice = book?.bestBid || book?.lastPrice || livePrices[pos.asset] || pos.currentPrice;
-  const result = executeInternalSell(account, positionId, 1.0, 'MANUAL_CLOSE', livePrice, DEFAULT_TAKER_FEE_RATE, 'assumed', book);
+  const livePrice = Math.max(book?.bestBid || 0, book?.bestAsk || 0, book?.lastPrice || 0, livePrices[pos.asset] || 0, pos.currentPrice || 0);
+  const exitPrice = livePrice >= 0.985 ? 0.99 : (livePrice > 0 ? livePrice : 0.99);
+  const exitReason = livePrice >= 0.985 ? 'TAKE_PROFIT_99¢_SPOT' : 'MANUAL_CLOSE';
+  const result = executeInternalSell(account, positionId, 1.0, exitReason, exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed');
   if (result.error) {
     return res.status(400).json({ ok: false, error: result.error });
   }

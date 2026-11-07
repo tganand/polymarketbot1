@@ -482,7 +482,7 @@ export default function App() {
                 <span>VPS 24/7 Terminal Setup</span>
               </button>
               <span className="text-[11px] font-mono text-emerald-400 font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25">
-                v3.3 Live · 91¢ Entry + 99¢ TP + $3 SL
+                v3.4 Live · Instant 99¢/100¢ Force-Exit
               </span>
             </div>
           </div>
@@ -501,10 +501,10 @@ export default function App() {
             <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-1.5">
               <div className="flex items-center gap-2 font-bold text-emerald-300">
                 <span className="flex h-2 w-2 rounded-full bg-emerald-400" />
-                <span>Rule 2: Locked 99¢ Take Profit (Instant)</span>
+                <span>Rule 2: Instant 99¢ & 100¢ Force-Exit</span>
               </div>
               <p className="text-slate-400 leading-relaxed font-mono text-[11px]">
-                As instructed, profit is closed on the spot strictly at <b>99.0¢</b> exact exit price. Proceeds and returns are booked at +99¢ net of fees.
+                As soon as price touches <b>≥ 99¢ or 100¢</b>, profit is booked on the spot strictly at <b>99.0¢</b> exact exit price with zero delay.
               </p>
             </div>
 
