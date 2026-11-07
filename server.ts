@@ -1278,7 +1278,7 @@ function evaluateMomentumStrategy(symbol: string) {
       : 0;
     const assetLivePrice = livePrices[thisAsset] || livePrices[key] || 0;
 
-    // Gather all valid price signals across CLOB book, feeds, and window
+    // Gather all valid live incoming price signals across CLOB book, feeds, and window
     const validPrices = [
       windowOutcomePrice,
       assetLivePrice > 0 ? assetLivePrice : undefined,
@@ -1287,14 +1287,19 @@ function evaluateMomentumStrategy(symbol: string) {
       bestBid > 0 ? bestBid : undefined,
       gammaPrice > 0 ? gammaPrice : undefined,
       (oppOutcomePrice !== undefined && oppOutcomePrice <= 0.02) ? (1.0 - oppOutcomePrice) : undefined,
-      pos.currentPrice > 0 ? pos.currentPrice : undefined,
     ].filter((p): p is number => typeof p === 'number' && !isNaN(p) && p > 0);
 
     const maxMarketPrice = validPrices.length > 0 ? Math.max(...validPrices) : (pos.currentPrice || pos.entryPrice);
-    const standardPrice = windowOutcomePrice ?? (lastPrice > 0 ? lastPrice : (bestAsk > 0 ? bestAsk : (bestBid > 0 ? bestBid : (pos.currentPrice || pos.entryPrice))));
+    
+    // Genuine exit price for stop loss (best bid, last traded, or live window)
+    const currentExitPrice = bestBid > 0
+      ? bestBid
+      : (lastPrice > 0
+        ? lastPrice
+        : (windowOutcomePrice ?? (oppOutcomePrice !== undefined && oppOutcomePrice > 0 ? (1.0 - oppOutcomePrice) : (bestAsk > 0 ? bestAsk : pos.currentPrice))));
 
     // If any indicator signals >= 98.5¢ (e.g. 99¢, 100¢ / 1.00, or opposite is 1¢), market target reached!
-    const realPrice = maxMarketPrice >= 0.985 ? maxMarketPrice : standardPrice;
+    const realPrice = maxMarketPrice >= 0.985 ? maxMarketPrice : currentExitPrice;
 
     if (realPrice > 0) {
       pos.currentPrice = realPrice;
@@ -1304,14 +1309,12 @@ function evaluateMomentumStrategy(symbol: string) {
     }
 
     // ABSOLUTE EXIT RULES: Instant Booking
-    const currentPrice = pos.currentPrice;
-    const unrealizedLoss = pos.totalCost - (pos.shares * currentPrice);
     const tpPrice = config.takeProfitPrice || 0.99;
     const maxLoss = config.stopLossDollars || 3.00;
 
     // A. TAKE-PROFIT: Exit strictly when price is >= 99¢ (0.99, 1.00, or configured TP)
-    if (currentPrice >= (tpPrice - 0.005) || maxMarketPrice >= (tpPrice - 0.005) || currentPrice >= 0.985 || maxMarketPrice >= 0.985) {
-      console.log(`🎯 [${symbol} 15m FORCE-CLOSE TP] ${pos.title} (${pos.outcome}) Price: ${currentPrice} (max: ${maxMarketPrice}). Exiting @ 99¢ strictly booked.`);
+    if (realPrice >= (tpPrice - 0.005) || maxMarketPrice >= (tpPrice - 0.005) || realPrice >= 0.985 || maxMarketPrice >= 0.985) {
+      console.log(`🎯 [${symbol} 15m FORCE-CLOSE TP] ${pos.title} (${pos.outcome}) Price: ${realPrice} (max: ${maxMarketPrice}). Exiting @ 99¢ strictly booked.`);
       const res = executeInternalSell(account, key, 1.0, 'TAKE_PROFIT_99¢_SPOT', 0.99, DEFAULT_TAKER_FEE_RATE, 'assumed');
       if (res.error) console.error(`❌ [${symbol} 15m TP ERROR]`, res.error);
       else {
@@ -1325,9 +1328,11 @@ function evaluateMomentumStrategy(symbol: string) {
     }
 
     // B. STOP-LOSS: Instant guaranteed close at $3.00 loss (preserving remaining $7.00 capital)
-    const posLoss = Math.max(unrealizedLoss, pos.totalCost - (pos.shares * realPrice), -pos.unrealizedPnl);
+    const lossFromExit = pos.totalCost - (pos.shares * currentExitPrice);
+    const lossFromReal = pos.totalCost - (pos.shares * realPrice);
+    const posLoss = Math.max(lossFromExit, lossFromReal, -pos.unrealizedPnl);
     const slThreshold = Math.min(maxLoss, 3.00);
-    if (posLoss >= (slThreshold - 0.05) || unrealizedLoss >= (slThreshold - 0.05)) {
+    if (posLoss >= (slThreshold - 0.05)) {
       const exitPrice = Math.max(0.01, Number(((pos.totalCost - slThreshold) / pos.shares).toFixed(4)));
       console.log(`🛑 [${symbol} 15m FORCE-CLOSE SL] ${pos.title} (${pos.outcome}) Loss: ${posLoss}. Exiting @ $${slThreshold.toFixed(2)} loss strictly booked.`);
       const res = executeInternalSell(account, key, 1.0, '15M_STOP_LOSS_$3.00', exitPrice, DEFAULT_TAKER_FEE_RATE, 'assumed');
